@@ -1,6 +1,6 @@
 from flask import Blueprint, request, Response, jsonify
 import json
-import pyodbc
+import mysql.connector
 from decimal import Decimal, InvalidOperation
 from shared_utils import get_db_connection, token_required, generate_signature, clean_string
 
@@ -85,19 +85,19 @@ def upload_msp():
         # Insert into the main 'msp' table
         msp_query = """
             INSERT INTO msp (trn_id, trn_desc, status, bid_date)
-            VALUES (?, ?, 'wait', ?);
-            SELECT SCOPE_IDENTITY();
+            VALUES (%s, %s, 'wait', %s)
         """
-        cursor.execute(msp_query, trn_id, trn_desc, bid_date)
-        row = cursor.fetchone()
-        if not row or not row[0]:
+        cursor.execute(msp_query, (trn_id, trn_desc, bid_date))
+        
+        # Retrieve the generated ID (MySQL style)
+        msp_id = cursor.lastrowid
+        
+        if not msp_id:
              conn.rollback()
              return jsonify({"error": "Failed to insert into msp table: could not retrieve generated ID."}), 500
-        
-        msp_id = int(row[0])
 
-        # Insert into 'tbl_dr'
-        dr_query = "INSERT INTO tbl_dr (id, db_ac, db_amt) VALUES (?, ?, ?)"
+        # Insert into 'tbl_dr' using %s placeholders
+        dr_query = "INSERT INTO tbl_dr (id, db_ac, db_amt) VALUES (%s, %s, %s)"
         for item in debit_entries:
             if not all(k in item for k in ['dr_ac', 'dr_amt']):
                 conn.rollback()
@@ -107,8 +107,8 @@ def upload_msp():
             db_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
             cursor.execute(dr_query, (msp_id, db_ac, db_amt))
         
-        # Insert into 'tbl_cr'
-        cr_query = "INSERT INTO tbl_cr (id, cr_ac, cr_amt) VALUES (?, ?, ?)"
+        # Insert into 'tbl_cr' using %s placeholders
+        cr_query = "INSERT INTO tbl_cr (id, cr_ac, cr_amt) VALUES (%s, %s, %s)"
         for item in credit_entries:
             if not all(k in item for k in ['cr_ac', 'cr_amt']):
                 conn.rollback()
@@ -129,11 +129,11 @@ def upload_msp():
             "message": "MSP transaction uploaded successfully"
         }), 201
 
-    except pyodbc.IntegrityError as e:
-        if "unique key" in str(e).lower() or "duplicate" in str(e).lower():
+    except mysql.connector.Error as e:
+        if e.errno == 1062: # Duplicate entry
              return jsonify({"error": f"Duplicate entry: An MSP transaction with trn_id '{trn_id}' already exists."}), 409
         else:
-            return jsonify({"error": f"Database integrity error: {str(e)}"}), 500
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
 
     except Exception as e:
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
@@ -171,14 +171,10 @@ def get_msp_status():
             return jsonify({"error": "Invalid signature"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True) # Use dictionary=True for MySQL to get field names
 
-        query = """
-            SELECT trn_id, status, fail_reason, create_date, update_date
-            FROM msp
-            WHERE trn_id = ?
-        """
-        cursor.execute(query, trn_id)
+        query = "SELECT trn_id, status, fail_reason, create_date, update_date FROM msp WHERE trn_id = %s"
+        cursor.execute(query, (trn_id,))
         msp_record = cursor.fetchone()
 
         if not msp_record:
@@ -186,17 +182,9 @@ def get_msp_status():
                 "error": f"No MSP transaction found with trn_id '{trn_id}'."
             }), 404
 
-        result = {
-            "trn_id": msp_record.trn_id,
-            "status": msp_record.status,
-            "fail_reason": msp_record.fail_reason or "",
-            "create_date": msp_record.create_date,
-            "update_date": msp_record.update_date
-        }
-
         return jsonify({
             "code": "200",
-            "data": result,
+            "data": msp_record,
             "message": "MSP transaction status retrieved successfully"
         }), 200
 
@@ -236,40 +224,28 @@ def cancel_msp():
             return jsonify({"error": "Invalid signature"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        check_query = "SELECT status FROM msp WHERE trn_id = ?"
-        cursor.execute(check_query, trn_id)
+        check_query = "SELECT status FROM msp WHERE trn_id = %s"
+        cursor.execute(check_query, (trn_id,))
         msp_record = cursor.fetchone()
 
         if not msp_record:
             return jsonify({"error": f"No MSP transaction found with trn_id '{trn_id}'."}), 404
 
-        if msp_record.status == 'cancel':
+        if msp_record['status'] == 'cancel':
             return jsonify({"error": f"MSP transaction with trn_id '{trn_id}' is already canceled."}), 400
 
-        if msp_record.status not in ['wait', 'success']:
+        if msp_record['status'] not in ['wait', 'success']:
             return jsonify({"error": f"MSP transaction with trn_id '{trn_id}' cannot be cancelled. Only transactions with status 'wait' or 'success' can be cancelled."}), 400
 
-        cancel_query = """
-            UPDATE msp
-            SET status = 'cancel'
-            WHERE trn_id = ?
-        """
-        cursor.execute(cancel_query, trn_id)
+        cancel_query = "UPDATE msp SET status = 'cancel' WHERE trn_id = %s"
+        cursor.execute(cancel_query, (trn_id,))
         conn.commit()
-
-        cursor.execute(check_query, trn_id)
-        updated_msp = cursor.fetchone()
-
-        result = {
-            "trn_id": trn_id,
-            "status": updated_msp.status
-        }
 
         return jsonify({
             "code": "200",
-            "data": result,
+            "data": {"trn_id": trn_id, "status": "cancel"},
             "message": f"Request to cancel MSP transaction '{trn_id}' was successful."
         }), 200
 
@@ -295,7 +271,7 @@ def search_msp_by_date():
 
         key_code = data.get("keyCode")
         sign_date = data.get("signDate")
-        trn_id = data.get("trn_id") # Using trn_id for consistency in signature
+        trn_id = data.get("trn_id")
         client_signature = data.get("sign")
         
         search_data = data.get("Data")
@@ -316,37 +292,20 @@ def search_msp_by_date():
             return jsonify({"error": "Invalid signature"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
         query = """
             SELECT trn_id, status, fail_reason, create_date, update_date
             FROM msp
-            WHERE CAST(create_date AS DATE) BETWEEN ? AND ?
+            WHERE DATE(create_date) BETWEEN %s AND %s
             ORDER BY create_date ASC
         """
         cursor.execute(query, (start_date_str, end_date_str))
         records = cursor.fetchall()
 
-        if not records:
-            return jsonify({
-                "code": "200",
-                "data": [],
-                "message": "No MSP records found within the specified date range."
-            }), 200
-
-        result_list = []
-        for record in records:
-            result_list.append({
-                "trn_id": record.trn_id,
-                "status": record.status,
-                "fail_reason": record.fail_reason or "",
-                "create_date": record.create_date,
-                "update_date": record.update_date
-            })
-
         return jsonify({
             "code": "200",
-            "data": result_list,
+            "data": records,
             "message": "MSP records retrieved successfully."
         }), 200
 
@@ -373,7 +332,7 @@ def retrieve_msp():
         key_code = data.get("keyCode")
         sign_date = data.get("signDate")
         client_signature = data.get("sign")
-        trn_id = data.get("trn_id") # Consistent signature parameter
+        trn_id = data.get("trn_id")
         
         search_data = data.get("Data")
         if not search_data:
@@ -399,37 +358,15 @@ def retrieve_msp():
             return jsonify({"error": "Invalid signature"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor()
+        cursor = conn.cursor(dictionary=True)
 
-        query = """
-            SELECT trn_id, status, fail_reason, create_date, update_date
-            FROM msp
-            WHERE status = ?
-            ORDER BY create_date ASC
-        """
-        cursor.execute(query, status_to_retrieve)
+        query = "SELECT trn_id, status, fail_reason, create_date, update_date FROM msp WHERE status = %s ORDER BY create_date ASC"
+        cursor.execute(query, (status_to_retrieve,))
         records = cursor.fetchall()
-
-        if not records:
-            return jsonify({
-                "code": "200",
-                "data": [],
-                "message": f"No MSP records found with status '{status_to_retrieve}'."
-            }), 200
-
-        result_list = []
-        for record in records:
-            result_list.append({
-                "trn_id": record.trn_id,
-                "status": record.status,
-                "fail_reason": record.fail_reason or "",
-                "create_date": record.create_date,
-                "update_date": record.update_date
-            })
 
         return jsonify({
             "code": "200",
-            "data": result_list,
+            "data": records,
             "message": f"MSP records with status '{status_to_retrieve}' retrieved successfully."
         }), 200
 

@@ -216,9 +216,6 @@ def convert_number_to_words():
 # Import and register your new expense blueprint
 from msp_api import msp_bp
 app.register_blueprint(msp_bp)
-
-from expenses_api import expenses_bp
-app.register_blueprint(expenses_bp)
 # ----------------------------------
 
 if __name__ == "__main__":
