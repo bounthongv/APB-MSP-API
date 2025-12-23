@@ -1,4 +1,4 @@
- Here is the guide to set it up on the Ubuntu server:
+Here is the guide to set it up on the Ubuntu server:
 
   1. Upload the Service File
   Upload the apb_api.service file you just created to the server (e.g., using SFTP or SCP) and move it to /etc/systemd/system/.
@@ -28,3 +28,42 @@
 
    1 systemctl status apb_api
   You should see Active: active (running).
+
+## Service without source code (PyInstaller)
+
+If you do not want to share the source code with the customer, you can compile the application into a standalone executable using **PyInstaller**.
+
+### 1. Build the Executable
+Run the following command in your development environment (must be the same OS as the server, e.g., Ubuntu):
+
+```bash
+pip install pyinstaller
+pyinstaller --onefile --name apb_api api.py
+```
+
+This generates a single executable file in `dist/apb_api`.
+
+### 2. Deploy
+Copy only the `dist/apb_api` file and your `.env` file to the server folder (e.g., `/root/apb_api`). You do not need the `.py` files.
+
+### 3. Update Service File
+Update your `apb_api.service` to run the executable directly instead of using Python.
+
+**Updated `apb_api.service`:**
+
+```ini
+[Unit]
+Description=APB API Service (Compiled)
+After=network.target
+
+[Service]
+User=root
+# Set the working directory to where the .env file is located
+WorkingDirectory=/root/apb_api
+# Point directly to the compiled executable
+ExecStart=/root/apb_api/apb_api
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
