@@ -77,8 +77,53 @@ test new keycode:
   "message": "MSP transaction uploaded successfully"
 }
 
+test from notebook:
+ Run this on your Ubuntu terminal to find your IP:
+ 
+  2. Configure Postman
+  Open Postman and create a new request:
+
+start with http, not yet setup reverse proxy
+get
+http://apis.com.la:8000/ping
+with token
 
 
+test upload 
+
+
+
+   * Method: POST
+   * URL: http://apis.com.la:8000/msp/upload
+   * Auth Tab:
+       * Select Type: Bearer Token
+       * Token: 8c57a7c3dfe7307abf40c9e35d0508ba6d2e2c4dda27ae66567627b0da5d68ae
+   * Headers Tab:
+       * Ensure Content-Type is set to application/json
+   * Body Tab:
+       * Select raw and choose JSON from the dropdown.
+       * Paste the following JSON:
+
+    1 {
+    2     "keyCode": "APB",
+    3     "signDate": "2025-12-22",
+    4     "trn_id": "12346",
+    5     "sign": "a90df154238e93297a7a51804b494632",
+    6     "trn_desc": "Postman Test from Notebook",
+    7     "bid_date": "2025-12-22",
+    8     "debit": [
+    9         {
+   10             "dr_ac": "1101001",
+   11             "dr_amt": "500000.00"
+   12         }
+   13     ],
+   14     "credit": [
+   15         {
+   16             "cr_ac": "2102005",
+   17             "cr_amt": "500000.00"
+   18         }
+   19     ]
+   20 }
 5. create apb_msp service (see also 27 in jdb doc and put here your new one)
 5. test
 5. after testing check how to compile 

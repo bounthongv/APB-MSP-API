@@ -1,0 +1,15 @@
+[Unit]
+Description=APB API Service
+After=network.target
+
+[Service]
+# Running as root since files are in /root/apb_api
+User=root
+WorkingDirectory=/root/apb_api
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+# Using python3 -m waitress ensures we use the installed module without worrying about the exact bin path
+ExecStart=/usr/bin/python3 -m waitress --listen=*:8000 api:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
