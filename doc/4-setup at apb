@@ -1,0 +1,140 @@
+after login with FortiFam to Ubuntu
+
+1. install mysql
+
+sudo apt update
+sudo apt upgrade -y
+
+sudo apt install mysql-server -y
+sudo systemctl status mysql
+sudo mysql_secure_installation
+
+2. login to mysql
+root@APISAPI:~# sudo mysql
+
+3. create database
+mysql> CREATE DATABASE apb_msp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+Query OK, 1 row affected (0.02 sec)
+
+mysql> SHOW DATABASES;
++--------------------+
+| Database           |
++--------------------+
+| apb_msp            |
+| information_schema |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+5 rows in set (0.00 sec)
+
+4. create Admin User with full previleges
+
+CREATE USER 'Admin'@'localhost' IDENTIFIED BY 'ApbAdmin@2025';
+
+grant priveledges:
+GRANT ALL PRIVILEGES ON *.* TO 'Admin'@'localhost' WITH GRANT OPTION;
+
+FLUSH PRIVILEGES;
+
+SHOW GRANTS FOR 'Admin'@'localhost';
+
+test:
+
+exit;
+
+mysql -u Admin -p
+
+---------------- 
+5. setup phpMyAdmin
+
+apache2 -v
+
+6. Apache not installed, need to install
+not yet install,
+need to install apache2
+
+root@APISAPI:~# apache2 -v
+Command 'apache2' not found, but can be installed with:
+apt install apache2-bin
+root@APISAPI:~# apt install apache2-bin
+
+sudo apt install apache2 -y
+
+7. install phpmyadmin continue
+sudo apt install php php-mysql php-mbstring php-zip php-gd php-json php-curl -y
+
+sudo systemctl restart apache2
+
+install phpMyAdmin
+
+sudo apt install phpmyadmin -y
+
+
+8. enable php extension
+
+sudo phpenmod mbstring
+sudo systemctl restart apache2
+
+enable php extension
+
+sudo phpenmod mbstring
+sudo systemctl restart apache2
+
+9. test phpmyadmin, on 101 run 
+
+http://10.151.146.91/phpmyadmin, 
+
+problem: 
+
+10. check if phpmyadmin installed but no configuration file, need to edit manually
+root@APISAPI:~# dpkg -l | grep phpmyadmin
+ii  php-phpmyadmin-motranslator          5.3.1-1                                 all          translation API for PHP using Gettext MO files
+ii  php-phpmyadmin-shapefile             3.0.2-1                                 all          ESRI ShapeFile library for PHP
+ii  php-phpmyadmin-sql-parser            5.8.2-1                                 all          validating SQL lexer and parser
+ii  phpmyadmin                           4:5.2.1+dfsg-3                          all          MySQL web administration tool
+
+root@APISAPI:~# ls /etc/apache2/conf-available/phpmyadmin.conf
+ls: cannot access '/etc/apache2/conf-available/phpmyadmin.conf': No such file or directory
+
+
+root@APISAPI:~# sudo nano /etc/apache2/conf-available/phpmyadmin.conf
+
+it is blank add this content to make phpmyadmin alias;
+
+
+Alias /phpmyadmin /usr/share/phpmyadmin
+
+<Directory /usr/share/phpmyadmin>
+    Options FollowSymLinks
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+</Directory>
+
+<Directory /usr/share/phpmyadmin/setup>
+    Require all granted
+</Directory>
+Alias /phpmyadmin /usr/share/phpmyadmin
+
+<Directory /usr/share/phpmyadmin>
+    Options FollowSymLinks
+    DirectoryIndex index.php
+    AllowOverride All
+    Require all granted
+</Directory>
+
+<Directory /usr/share/phpmyadmin/setup>
+    Require all granted
+</Directory>
+
+save and Enabling conf phpmyadmin.
+
+sudo a2enconf phpmyadmin
+
+systemctl reload apache2
+sudo systemctl restart apache2
+
+now phpmyadmin works, 
+create tables using the same script.
+

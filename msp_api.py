@@ -28,17 +28,17 @@ def upload_msp():
         trn_id = clean_string(data.get("trn_id"))
         client_signature = data.get("sign")
         trn_desc = data.get("trn_desc")
-        bid_date = data.get("bid_date")
+        bis_date = data.get("bis_date")
         
         # Entries are provided at the root level
         debit_entries = data.get("debit")
         credit_entries = data.get("credit")
 
         # Validate presence of required fields
-        if not all([key_code, sign_date, trn_id, client_signature, trn_desc, bid_date, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, trn_desc, bid_date, debit, or credit"}), 400
+        if not all([key_code, sign_date, trn_id, client_signature, trn_desc, bis_date, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, trn_desc, bis_date, debit, or credit"}), 400
 
-        if key_code != "VTI":
+        if key_code != "APB":
             return jsonify({"error": "Invalid keyCode"}), 400
 
         # --- 2. Authenticate the Signature ---
@@ -84,10 +84,10 @@ def upload_msp():
 
         # Insert into the main 'msp' table
         msp_query = """
-            INSERT INTO msp (trn_id, trn_desc, status, bid_date)
+            INSERT INTO msp (trn_id, trn_desc, status, bis_date)
             VALUES (%s, %s, 'wait', %s)
         """
-        cursor.execute(msp_query, (trn_id, trn_desc, bid_date))
+        cursor.execute(msp_query, (trn_id, trn_desc, bis_date))
         
         # Retrieve the generated ID (MySQL style)
         msp_id = cursor.lastrowid
@@ -163,7 +163,7 @@ def get_msp_status():
         if not all([key_code, sign_date, trn_id, client_signature]):
             return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, or sign"}), 400
 
-        if key_code != "VTI":
+        if key_code != "APB":
             return jsonify({"error": "Invalid keyCode"}), 400
 
         server_signature = generate_signature(key_code, sign_date, trn_id)
@@ -216,7 +216,7 @@ def cancel_msp():
         if not all([key_code, sign_date, trn_id, client_signature]):
             return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, or sign"}), 400
 
-        if key_code != "VTI":
+        if key_code != "APB":
             return jsonify({"error": "Invalid keyCode"}), 400
 
         server_signature = generate_signature(key_code, sign_date, trn_id)
@@ -284,7 +284,7 @@ def search_msp_by_date():
         if not all([key_code, sign_date, trn_id, client_signature, start_date_str, end_date_str]):
             return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, startDate, or endDate"}), 400
 
-        if key_code != "VTI":
+        if key_code != "APB":
             return jsonify({"error": "Invalid keyCode"}), 400
             
         server_signature = generate_signature(key_code, sign_date, trn_id)
@@ -322,35 +322,40 @@ def search_msp_by_date():
 def retrieve_msp():
     """
     Retrieves all MSP records that match a given status.
+    Uses query parameters for authentication and data filtering.
     """
     conn = None
     try:
-        data = request.get_json()
-        if not data:
-            return jsonify({"error": "Invalid or empty JSON input"}), 400
+        # For GET requests, we should check query parameters
+        key_code = request.args.get("keyCode")
+        sign_date = request.args.get("signDate")
+        client_signature = request.args.get("sign")
+        trn_id = request.args.get("trn_id")
+        status_to_retrieve = request.args.get("status")
 
-        key_code = data.get("keyCode")
-        sign_date = data.get("signDate")
-        client_signature = data.get("sign")
-        trn_id = data.get("trn_id")
-        
-        search_data = data.get("Data")
-        if not search_data:
-             return jsonify({"error": "Missing 'Data' object in the payload"}), 400
-
-        status_to_retrieve = search_data.get("status")
+        # Fallback to JSON if not in query parameters (for flexibility)
+        if not all([key_code, sign_date, client_signature, trn_id, status_to_retrieve]):
+            data = request.get_json(silent=True)
+            if data:
+                key_code = key_code or data.get("keyCode")
+                sign_date = sign_date or data.get("signDate")
+                client_signature = client_signature or data.get("sign")
+                trn_id = trn_id or data.get("trn_id")
+                search_data = data.get("Data")
+                if search_data:
+                    status_to_retrieve = status_to_retrieve or search_data.get("status")
 
         allowed_statuses = ['wait', 'cancel', 'pending', 'success', 'fail']
         if not status_to_retrieve or status_to_retrieve not in allowed_statuses:
             return jsonify({
-                "error": "Missing or invalid 'status' in 'Data' object.",
+                "error": "Missing or invalid 'status'.",
                 "allowed_values": allowed_statuses
             }), 400
 
         if not all([key_code, sign_date, trn_id, client_signature]):
             return jsonify({"error": "Missing required fields for authentication: keyCode, signDate, trn_id, or sign"}), 400
 
-        if key_code != "VTI":
+        if key_code != "APB":
             return jsonify({"error": "Invalid keyCode for this operation"}), 400
 
         server_signature = generate_signature(key_code, sign_date, trn_id)
@@ -360,7 +365,7 @@ def retrieve_msp():
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
 
-        query = "SELECT trn_id, status, fail_reason, create_date, update_date FROM msp WHERE status = %s ORDER BY create_date ASC"
+        query = "SELECT `trn_id`, `status`, `fail_reason`, `create_date`, `update_date` FROM `msp` WHERE `status` = %s ORDER BY `create_date` ASC"
         cursor.execute(query, (status_to_retrieve,))
         records = cursor.fetchall()
 

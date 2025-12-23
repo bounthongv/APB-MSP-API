@@ -1,9 +1,13 @@
 from flask import Flask, request, Response, jsonify
-import pyodbc
 import json
 import os
 import hashlib
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # remove these function to shared_utils
 from shared_utils import get_db_connection, token_required, generate_signature, \
 string_sort, generate_signature_apis, clean_string
@@ -11,77 +15,7 @@ string_sort, generate_signature_apis, clean_string
 # Flask app
 app = Flask(__name__)
 
-# Define the decorator at the top
-#stored_token = os.getenv("BEARER_TOKEN")
-# I have saved earleir with different name
-# stored_token = os.getenv("API_TOKEN")
-
-# def token_required(f):
-#     """Decorator to protect routes with Bearer Token Authentication."""
-#     def wrapper(*args, **kwargs):
-#         # Get the Authorization header
-#         auth_header = request.headers.get("Authorization")
-        
-#         # Check if the Authorization header is provided and in the correct format
-#         if not auth_header or not auth_header.startswith("Bearer "):
-#             return jsonify({"msg": "Missing or invalid Authorization header"}), 401
-        
-#         # Extract the token
-#         token = auth_header.split(" ")[1]
-        
-#         # Compare the provided token with the stored token
-#         if token != stored_token:
-#             return jsonify({"msg": "Invalid token"}), 401
-        
-#         return f(*args, **kwargs)
-
-#     wrapper.__name__ = f.__name__  # Preserve the name of the original function
-#     return wrapper
-
-
-
-
-# # Retrieve database configuration from environment variables
-# DB_HOST = os.getenv("DB_HOST", "localhost\\MSSQLSERVER")
-# DB_PORT = os.getenv("DB_PORT", "1558")
-# DB_USER = os.getenv("DB_USER", "APIS_TEST")
-# DB_PASSWORD = os.getenv("DB_PASSWORD", "apis@2025")
-# DB_NAME = os.getenv("DB_NAME", "TaxAPI")
-
-
-# # Secret key for HMAC signing (this should be stored securely)
-# # SECRET_KEY = os.getenv('SECRET_KEY')
-
-
-# def string_sort(value):
-#     """Sort the characters in a string."""
-#     return ''.join(sorted(value))
-
-# def generate_signature(key_code, sign_date, order_no):
-#     """Generate a signature using keyCode, signDate, and ORDER_NO."""
-#     concatenated = f"{key_code}{sign_date}{order_no}"
-#     sorted_string = string_sort(concatenated)
-#     signature = hashlib.md5(sorted_string.encode()).hexdigest()
-#     return signature
-
-# def generate_signature_apis(key_code, sign_date):
-#     """Generate a signature using keyCode, signDate"""
-#     concatenated = f"{key_code}{sign_date}"
-#     sorted_string = string_sort(concatenated)
-#     signature = hashlib.md5(sorted_string.encode()).hexdigest()
-#     return signature
-
-# def get_db_connection():
-#     """Establish a connection to the MSSQL database."""
-#     connection_string = (
-#         f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-#         f"SERVER={DB_HOST},{DB_PORT};"
-#         f"DATABASE={DB_NAME};"
-#         f"UID={DB_USER};"
-#         f"PWD={DB_PASSWORD}"
-#     )
-#     return pyodbc.connect(connection_string)
-
+# Root endpoint
 @app.route('/', methods=['GET'])
 def root():
     """Root endpoint to indicate the API is running."""
@@ -220,4 +154,4 @@ app.register_blueprint(msp_bp)
 
 if __name__ == "__main__":
     # app.run(debug=False)
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=8000, debug=True)
