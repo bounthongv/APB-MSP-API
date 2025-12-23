@@ -2,7 +2,7 @@ from flask import Blueprint, request, Response, jsonify
 import json
 import mysql.connector
 from decimal import Decimal, InvalidOperation
-from shared_utils import get_db_connection, token_required, generate_signature, clean_string
+from shared_utils import get_db_connection, token_required, clean_string
 
 # Create a Blueprint object for all MSP-related endpoints.
 # All routes in this file will start with /msp
@@ -23,10 +23,8 @@ def upload_msp():
             return jsonify({"error": "Invalid or empty JSON input"}), 400
 
         # Extract fields from the root level
-        key_code = data.get("keyCode")
-        sign_date = data.get("signDate")
+        # Removed security fields: keyCode, signDate, sign
         trn_id = clean_string(data.get("trn_id"))
-        client_signature = data.get("sign")
         trn_desc = data.get("trn_desc")
         bis_date = data.get("bis_date")
         
@@ -35,25 +33,16 @@ def upload_msp():
         credit_entries = data.get("credit")
 
         # Validate presence of required fields
-        if not all([key_code, sign_date, trn_id, client_signature, trn_desc, bis_date, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, trn_desc, bis_date, debit, or credit"}), 400
+        if not all([trn_id, trn_desc, bis_date, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: trn_id, trn_desc, bis_date, debit, or credit"}), 400
 
-        if key_code != "APB":
-            return jsonify({"error": "Invalid keyCode"}), 400
-
-        # --- 2. Authenticate the Signature ---
-        # The signature uses keyCode, signDate, and trn_id
-        server_signature = generate_signature(key_code, sign_date, trn_id)
-        if client_signature != server_signature:
-            return jsonify({"error": "Invalid signature"}), 400
-            
-        # --- 3. Validate Debit and Credit Entries ---
+        # --- 2. Validate Debit and Credit Entries ---
         if not isinstance(debit_entries, list) or len(debit_entries) == 0:
             return jsonify({"error": "Invalid or empty 'debit' array"}), 400
         if not isinstance(credit_entries, list) or len(credit_entries) == 0:
             return jsonify({"error": "Invalid or empty 'credit' array"}), 400
 
-        # --- 4. Core Business Logic: Sum and Compare Debit/Credit Amounts ---
+        # --- 3. Core Business Logic: Sum and Compare Debit/Credit Amounts ---
         total_debit = Decimal('0')
         total_credit = Decimal('0')
 
@@ -78,11 +67,12 @@ def upload_msp():
                 }
             }), 400
 
-        # --- 5. Database Operations ---
+        # --- 4. Database Operations ---
         conn = get_db_connection()
         cursor = conn.cursor()
 
         # Insert into the main 'msp' table
+        # Status defaults to 'wait'
         msp_query = """
             INSERT INTO msp (trn_id, trn_desc, status, bis_date)
             VALUES (%s, %s, 'wait', %s)
@@ -120,7 +110,7 @@ def upload_msp():
 
         conn.commit()
 
-        # --- 6. Return Success Response ---
+        # --- 5. Return Success Response ---
         return jsonify({
             "code": "200",
             "data": {
@@ -155,23 +145,14 @@ def get_msp_status():
         if not data:
             return jsonify({"error": "Invalid or empty JSON input"}), 400
 
-        key_code = data.get("keyCode")
-        sign_date = data.get("signDate")
+        # Removed security fields
         trn_id = data.get("trn_id")
-        client_signature = data.get("sign")
 
-        if not all([key_code, sign_date, trn_id, client_signature]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, or sign"}), 400
-
-        if key_code != "APB":
-            return jsonify({"error": "Invalid keyCode"}), 400
-
-        server_signature = generate_signature(key_code, sign_date, trn_id)
-        if client_signature != server_signature:
-            return jsonify({"error": "Invalid signature"}), 400
+        if not trn_id:
+            return jsonify({"error": "Missing required field: trn_id"}), 400
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True) # Use dictionary=True for MySQL to get field names
+        cursor = conn.cursor(dictionary=True)
 
         query = "SELECT trn_id, status, fail_reason, create_date, update_date FROM msp WHERE trn_id = %s"
         cursor.execute(query, (trn_id,))
@@ -208,20 +189,11 @@ def cancel_msp():
         if not data:
             return jsonify({"error": "Invalid or empty JSON input"}), 400
 
-        key_code = data.get("keyCode")
-        sign_date = data.get("signDate")
+        # Removed security fields
         trn_id = data.get("trn_id")
-        client_signature = data.get("sign")
 
-        if not all([key_code, sign_date, trn_id, client_signature]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, or sign"}), 400
-
-        if key_code != "APB":
-            return jsonify({"error": "Invalid keyCode"}), 400
-
-        server_signature = generate_signature(key_code, sign_date, trn_id)
-        if client_signature != server_signature:
-            return jsonify({"error": "Invalid signature"}), 400
+        if not trn_id:
+            return jsonify({"error": "Missing required field: trn_id"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -269,10 +241,7 @@ def search_msp_by_date():
         if not data:
             return jsonify({"error": "Invalid or empty JSON input"}), 400
 
-        key_code = data.get("keyCode")
-        sign_date = data.get("signDate")
-        trn_id = data.get("trn_id")
-        client_signature = data.get("sign")
+        # Removed security fields
         
         search_data = data.get("Data")
         if not search_data:
@@ -281,15 +250,8 @@ def search_msp_by_date():
         start_date_str = search_data.get("startDate")
         end_date_str = search_data.get("endDate")
 
-        if not all([key_code, sign_date, trn_id, client_signature, start_date_str, end_date_str]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, startDate, or endDate"}), 400
-
-        if key_code != "APB":
-            return jsonify({"error": "Invalid keyCode"}), 400
-            
-        server_signature = generate_signature(key_code, sign_date, trn_id)
-        if client_signature != server_signature:
-            return jsonify({"error": "Invalid signature"}), 400
+        if not all([start_date_str, end_date_str]):
+            return jsonify({"error": "Missing required fields: startDate, or endDate"}), 400
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
@@ -322,28 +284,20 @@ def search_msp_by_date():
 def retrieve_msp():
     """
     Retrieves all MSP records that match a given status.
-    Uses query parameters for authentication and data filtering.
     """
     conn = None
     try:
-        # For GET requests, we should check query parameters
-        key_code = request.args.get("keyCode")
-        sign_date = request.args.get("signDate")
-        client_signature = request.args.get("sign")
-        trn_id = request.args.get("trn_id")
+        data = request.get_json(silent=True)
+        status_to_retrieve = None
+
+        # Check query parameters first
         status_to_retrieve = request.args.get("status")
 
-        # Fallback to JSON if not in query parameters (for flexibility)
-        if not all([key_code, sign_date, client_signature, trn_id, status_to_retrieve]):
-            data = request.get_json(silent=True)
-            if data:
-                key_code = key_code or data.get("keyCode")
-                sign_date = sign_date or data.get("signDate")
-                client_signature = client_signature or data.get("sign")
-                trn_id = trn_id or data.get("trn_id")
-                search_data = data.get("Data")
-                if search_data:
-                    status_to_retrieve = status_to_retrieve or search_data.get("status")
+        # Fallback to JSON if not in query parameters
+        if not status_to_retrieve and data:
+            search_data = data.get("Data")
+            if search_data:
+                status_to_retrieve = search_data.get("status")
 
         allowed_statuses = ['wait', 'cancel', 'pending', 'success', 'fail']
         if not status_to_retrieve or status_to_retrieve not in allowed_statuses:
@@ -352,15 +306,7 @@ def retrieve_msp():
                 "allowed_values": allowed_statuses
             }), 400
 
-        if not all([key_code, sign_date, trn_id, client_signature]):
-            return jsonify({"error": "Missing required fields for authentication: keyCode, signDate, trn_id, or sign"}), 400
-
-        if key_code != "APB":
-            return jsonify({"error": "Invalid keyCode for this operation"}), 400
-
-        server_signature = generate_signature(key_code, sign_date, trn_id)
-        if client_signature != server_signature:
-            return jsonify({"error": "Invalid signature"}), 400
+        # Removed security checks (keyCode, signDate, sign, trn_id logic for this endpoint)
 
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
