@@ -8,7 +8,7 @@ User=root
 WorkingDirectory=/root/apb_api
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 # Using python3 -m waitress ensures we use the installed module without worrying about the exact bin path
-ExecStart=/usr/bin/python3 -m waitress --listen=*:8000 api:app
+ExecStart=/root/apb_api/venv/bin/python -m waitress --listen=*:8000 api:app
 Restart=always
 
 [Install]
