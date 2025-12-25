@@ -27,6 +27,8 @@ CREATE TABLE `msp` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `trn_id` VARCHAR(20) NOT NULL,
   `trn_desc` VARCHAR(250) NOT NULL,
+  `currency` VARCHAR(5) NOT NULL,
+  `acc_book` VARCHAR(20) NOT NULL,
   `status` VARCHAR(50) NOT NULL,
   `fail_reason` VARCHAR(250) DEFAULT NULL,
 
@@ -52,9 +54,9 @@ COMMIT;
 CREATE TABLE `tbl_dr` (
   `id` INT NOT NULL AUTO_INCREMENT,
   `trn_id` VARCHAR(20) NOT NULL,
-  `db_ac` VARCHAR(20) NOT NULL,
-  `db_amt` DECIMAL(18,2) NOT NULL,
-  `db_desc` VARCHAR(250) DEFAULT NULL,
+  `dr_ac` VARCHAR(20) NOT NULL,
+  `dr_amt` DECIMAL(18,2) NOT NULL,
+  `dr_desc` VARCHAR(250) DEFAULT NULL,
 
   PRIMARY KEY (`id`),
   KEY `idx_dr_trn_id` (`trn_id`),

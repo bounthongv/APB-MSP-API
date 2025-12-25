@@ -28,6 +28,8 @@ def upload_msp():
         trn_id = clean_string(data.get("trn_id"))
         client_signature = data.get("sign")
         trn_desc = data.get("trn_desc")
+        currency = data.get("currency")
+        acc_book = data.get("acc_book")
         bis_date = data.get("bis_date")
         
         # Entries are provided at the root level
@@ -35,8 +37,8 @@ def upload_msp():
         credit_entries = data.get("credit")
 
         # Validate presence of required fields
-        if not all([key_code, sign_date, trn_id, client_signature, trn_desc, bis_date, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, trn_desc, bis_date, debit, or credit"}), 400
+        if not all([key_code, sign_date, trn_id, client_signature, trn_desc, currency, acc_book, bis_date, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: keyCode, signDate, trn_id, sign, trn_desc, currency, acc_book, bis_date, debit, or credit"}), 400
 
         if key_code != "APB":
             return jsonify({"error": "Invalid keyCode"}), 400
@@ -84,10 +86,10 @@ def upload_msp():
 
         # Insert into the main 'msp' table
         msp_query = """
-            INSERT INTO msp (trn_id, trn_desc, status, bis_date)
-            VALUES (%s, %s, 'wait', %s)
+            INSERT INTO msp (trn_id, trn_desc, currency, acc_book, status, bis_date)
+            VALUES (%s, %s, %s, %s, 'wait', %s)
         """
-        cursor.execute(msp_query, (trn_id, trn_desc, bis_date))
+        cursor.execute(msp_query, (trn_id, trn_desc, currency, acc_book, bis_date))
         
         # Retrieve the generated ID (MySQL style)
         msp_id = cursor.lastrowid
@@ -97,15 +99,15 @@ def upload_msp():
              return jsonify({"error": "Failed to insert into msp table: could not retrieve generated ID."}), 500
 
         # Insert into 'tbl_dr' using %s placeholders
-        dr_query = "INSERT INTO tbl_dr (id, db_ac, db_amt) VALUES (%s, %s, %s)"
+        dr_query = "INSERT INTO tbl_dr (id, dr_ac, dr_amt) VALUES (%s, %s, %s)"
         for item in debit_entries:
             if not all(k in item for k in ['dr_ac', 'dr_amt']):
                 conn.rollback()
                 return jsonify({"error": "A debit entry is missing a required field (dr_ac, or dr_amt)"}), 400
             
-            db_ac = clean_string(item.get('dr_ac'))
-            db_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
-            cursor.execute(dr_query, (msp_id, db_ac, db_amt))
+            dr_ac = clean_string(item.get('dr_ac'))
+            dr_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
+            cursor.execute(dr_query, (msp_id, dr_ac, dr_amt))
         
         # Insert into 'tbl_cr' using %s placeholders
         cr_query = "INSERT INTO tbl_cr (id, cr_ac, cr_amt) VALUES (%s, %s, %s)"

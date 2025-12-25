@@ -25,6 +25,8 @@ def upload_msp():
         # Mandatory root fields
         trn_id = clean_string(data.get("trn_id"))
         trn_desc = data.get("trn_desc")
+        currency = data.get("currency")
+        acc_book = data.get("acc_book")
         bis_date = data.get("bis_date")
         status = data.get("status")
         create_date = data.get("create_date")
@@ -34,8 +36,8 @@ def upload_msp():
         credit_entries = data.get("credit")
 
         # Validate presence of required root fields
-        if not all([trn_id, trn_desc, bis_date, status, create_date, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: trn_id, trn_desc, bis_date, status, create_date, debit, or credit"}), 400
+        if not all([trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit, or credit"}), 400
 
         # --- 2. Validate Entries and Calculate Totals ---
         total_debit = Decimal('0')
@@ -72,18 +74,18 @@ def upload_msp():
 
         # Insert into main 'msp' table
         msp_query = """
-            INSERT INTO msp (trn_id, trn_desc, status, bis_date, create_date)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO msp (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(msp_query, (trn_id, trn_desc, status, bis_date, create_date))
+        cursor.execute(msp_query, (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date))
 
         # Insert into 'tbl_dr' using trn_id
-        dr_query = "INSERT INTO tbl_dr (trn_id, db_ac, db_amt, db_desc) VALUES (%s, %s, %s, %s)"
+        dr_query = "INSERT INTO tbl_dr (trn_id, dr_ac, dr_amt, dr_desc) VALUES (%s, %s, %s, %s)"
         for item in debit_entries:
-            db_ac = clean_string(item.get('dr_ac'))
-            db_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
-            db_desc = item.get('dr_desc') # Optional (None if missing)
-            cursor.execute(dr_query, (trn_id, db_ac, db_amt, db_desc))
+            dr_ac = clean_string(item.get('dr_ac'))
+            dr_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
+            dr_desc = item.get('dr_desc') # Optional (None if missing)
+            cursor.execute(dr_query, (trn_id, dr_ac, dr_amt, dr_desc))
         
         # Insert into 'tbl_cr' using trn_id
         cr_query = "INSERT INTO tbl_cr (trn_id, cr_ac, cr_amt, cr_desc) VALUES (%s, %s, %s, %s)"
