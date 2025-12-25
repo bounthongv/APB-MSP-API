@@ -30,9 +30,8 @@ CREATE TABLE `msp` (
   `currency` VARCHAR(5) NOT NULL,
   `acc_book` VARCHAR(20) NOT NULL,
   `status` VARCHAR(50) NOT NULL,
-  `ex_rate` DECIMAL(18,2) NOT NULL,
+  `ex_rate` DECIMAL(18,2) NOT NULL DEFAULT 1.00, 
   `fail_reason` VARCHAR(250) DEFAULT NULL,
-
   `bis_date` DATETIME NOT NULL,
   `create_date` DATETIME NOT NULL,
   `update_date` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,

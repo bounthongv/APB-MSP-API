@@ -30,35 +30,101 @@ def upload_msp():
         bis_date = data.get("bis_date")
         status = data.get("status")
         create_date = data.get("create_date")
+        
+        # ex_rate logic based on currency
         ex_rate = data.get("ex_rate")
+        is_local_currency = (currency == 'LAK')
+
+        if is_local_currency:
+            if ex_rate is None:
+                ex_rate = Decimal('1.00')
+            else:
+                ex_rate = Decimal(str(ex_rate))
+        else:
+            # Foreign currency
+            if ex_rate is None:
+                return jsonify({"error": "Missing required field: ex_rate (required for foreign currency)"}), 400
+            ex_rate = Decimal(str(ex_rate))
+            if ex_rate == Decimal('1.00') or ex_rate == Decimal('1'):
+                 return jsonify({"error": "ex_rate must not be 1 for foreign currency"}), 400
         
         # Mandatory lists
         debit_entries = data.get("debit")
         credit_entries = data.get("credit")
 
         # Validate presence of required root fields
-        if not all([trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, ex_rate, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, ex_rate, debit, or credit"}), 400
+        if not all([trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit, or credit"}), 400
 
         # --- 2. Validate Entries and Calculate Totals ---
         total_debit = Decimal('0')
         total_credit = Decimal('0')
+        
+        final_debit_entries = []
+        final_credit_entries = []
 
         try:
-            # Calculate total debit
+            # Calculate total debit and validate LAK amounts
             for item in debit_entries:
-                if not all(k in item for k in ['dr_ac', 'dr_amt', 'dr_amt_lak']):
-                    return jsonify({"error": "A debit entry is missing 'dr_ac', 'dr_amt' or 'dr_amt_lak'"}), 400
+                if not all(k in item for k in ['dr_ac', 'dr_amt']):
+                    return jsonify({"error": "A debit entry is missing 'dr_ac' or 'dr_amt'"}), 400
+                
                 amount_str = str(item.get('dr_amt', '0')).replace(',', '')
-                total_debit += Decimal(amount_str)
+                dr_amt = Decimal(amount_str)
+                total_debit += dr_amt
+                
+                # Logic for dr_amt_lak
+                dr_amt_lak_val = item.get('dr_amt_lak')
+                if is_local_currency:
+                    # Optional, defaults to dr_amt
+                    if dr_amt_lak_val is None:
+                        dr_amt_lak = dr_amt
+                    else:
+                        dr_amt_lak = Decimal(str(dr_amt_lak_val).replace(',', ''))
+                else:
+                    # Mandatory and must != dr_amt
+                    if dr_amt_lak_val is None:
+                         return jsonify({"error": "Missing 'dr_amt_lak' for foreign currency debit entry"}), 400
+                    dr_amt_lak = Decimal(str(dr_amt_lak_val).replace(',', ''))
+                    if dr_amt_lak == dr_amt:
+                        return jsonify({"error": "dr_amt_lak must be different from dr_amt for foreign currency"}), 400
+                
+                # Store processed item to avoid re-parsing
+                final_item = item.copy()
+                final_item['dr_amt_decimal'] = dr_amt
+                final_item['dr_amt_lak_decimal'] = dr_amt_lak
+                final_debit_entries.append(final_item)
 
-            # Calculate total credit
+            # Calculate total credit and validate LAK amounts
             for item in credit_entries:
-                if not all(k in item for k in ['cr_ac', 'cr_amt', 'cr_amt_lak']):
-                    return jsonify({"error": "A credit entry is missing 'cr_ac', 'cr_amt' or 'cr_amt_lak'"}), 400
+                if not all(k in item for k in ['cr_ac', 'cr_amt']):
+                    return jsonify({"error": "A credit entry is missing 'cr_ac' or 'cr_amt'"}), 400
                 
                 amount_str = str(item.get('cr_amt', '0')).replace(',', '')
-                total_credit += Decimal(amount_str)
+                cr_amt = Decimal(amount_str)
+                total_credit += cr_amt
+                
+                # Logic for cr_amt_lak
+                cr_amt_lak_val = item.get('cr_amt_lak')
+                if is_local_currency:
+                    # Optional, defaults to cr_amt
+                    if cr_amt_lak_val is None:
+                        cr_amt_lak = cr_amt
+                    else:
+                        cr_amt_lak = Decimal(str(cr_amt_lak_val).replace(',', ''))
+                else:
+                     # Mandatory and must != cr_amt
+                    if cr_amt_lak_val is None:
+                         return jsonify({"error": "Missing 'cr_amt_lak' for foreign currency credit entry"}), 400
+                    cr_amt_lak = Decimal(str(cr_amt_lak_val).replace(',', ''))
+                    if cr_amt_lak == cr_amt:
+                        return jsonify({"error": "cr_amt_lak must be different from cr_amt for foreign currency"}), 400
+
+                # Store processed item
+                final_item = item.copy()
+                final_item['cr_amt_decimal'] = cr_amt
+                final_item['cr_amt_lak_decimal'] = cr_amt_lak
+                final_credit_entries.append(final_item)
 
         except (InvalidOperation, TypeError, KeyError) as e:
             return jsonify({"error": f"Invalid amount format in entries. Details: {e}"}), 400
@@ -82,20 +148,20 @@ def upload_msp():
 
         # Insert into 'tbl_dr' using trn_id
         dr_query = "INSERT INTO tbl_dr (trn_id, dr_ac, dr_amt, dr_amt_lak, dr_desc) VALUES (%s, %s, %s, %s, %s)"
-        for item in debit_entries:
+        for item in final_debit_entries:
             dr_ac = clean_string(item.get('dr_ac'))
-            dr_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
-            dr_amt_lak = Decimal(str(item.get('dr_amt_lak', '0')).replace(',', ''))
-            dr_desc = item.get('dr_desc') # Optional (None if missing)
+            dr_amt = item['dr_amt_decimal']
+            dr_amt_lak = item['dr_amt_lak_decimal']
+            dr_desc = item.get('dr_desc') 
             cursor.execute(dr_query, (trn_id, dr_ac, dr_amt, dr_amt_lak, dr_desc))
         
         # Insert into 'tbl_cr' using trn_id
         cr_query = "INSERT INTO tbl_cr (trn_id, cr_ac, cr_amt, cr_amt_lak, cr_desc) VALUES (%s, %s, %s, %s, %s)"
-        for item in credit_entries:
+        for item in final_credit_entries:
             cr_ac = clean_string(item.get('cr_ac'))
-            cr_amt = Decimal(str(item.get('cr_amt', '0')).replace(',', ''))
-            cr_amt_lak = Decimal(str(item.get('cr_amt_lak', '0')).replace(',', ''))
-            cr_desc = item.get('cr_desc') # Optional (None if missing)
+            cr_amt = item['cr_amt_decimal']
+            cr_amt_lak = item['cr_amt_lak_decimal']
+            cr_desc = item.get('cr_desc') 
             cursor.execute(cr_query, (trn_id, cr_ac, cr_amt, cr_amt_lak, cr_desc))
 
         conn.commit()
