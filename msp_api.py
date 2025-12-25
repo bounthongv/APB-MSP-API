@@ -30,14 +30,15 @@ def upload_msp():
         bis_date = data.get("bis_date")
         status = data.get("status")
         create_date = data.get("create_date")
+        ex_rate = data.get("ex_rate")
         
         # Mandatory lists
         debit_entries = data.get("debit")
         credit_entries = data.get("credit")
 
         # Validate presence of required root fields
-        if not all([trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit_entries, credit_entries]):
-            return jsonify({"error": "Missing required fields: trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, debit, or credit"}), 400
+        if not all([trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, ex_rate, debit_entries, credit_entries]):
+            return jsonify({"error": "Missing required fields: trn_id, trn_desc, currency, acc_book, bis_date, status, create_date, ex_rate, debit, or credit"}), 400
 
         # --- 2. Validate Entries and Calculate Totals ---
         total_debit = Decimal('0')
@@ -46,15 +47,15 @@ def upload_msp():
         try:
             # Calculate total debit
             for item in debit_entries:
-                if not all(k in item for k in ['dr_ac', 'dr_amt']):
-                    return jsonify({"error": "A debit entry is missing 'dr_ac' or 'dr_amt'"}), 400
+                if not all(k in item for k in ['dr_ac', 'dr_amt', 'dr_amt_lak']):
+                    return jsonify({"error": "A debit entry is missing 'dr_ac', 'dr_amt' or 'dr_amt_lak'"}), 400
                 amount_str = str(item.get('dr_amt', '0')).replace(',', '')
                 total_debit += Decimal(amount_str)
 
             # Calculate total credit
             for item in credit_entries:
-                if not all(k in item for k in ['cr_ac', 'cr_amt']):
-                    return jsonify({"error": "A credit entry is missing 'cr_ac' or 'cr_amt'"}), 400
+                if not all(k in item for k in ['cr_ac', 'cr_amt', 'cr_amt_lak']):
+                    return jsonify({"error": "A credit entry is missing 'cr_ac', 'cr_amt' or 'cr_amt_lak'"}), 400
                 
                 amount_str = str(item.get('cr_amt', '0')).replace(',', '')
                 total_credit += Decimal(amount_str)
@@ -74,26 +75,28 @@ def upload_msp():
 
         # Insert into main 'msp' table
         msp_query = """
-            INSERT INTO msp (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO msp (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date, ex_rate)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
-        cursor.execute(msp_query, (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date))
+        cursor.execute(msp_query, (trn_id, trn_desc, currency, acc_book, status, bis_date, create_date, ex_rate))
 
         # Insert into 'tbl_dr' using trn_id
-        dr_query = "INSERT INTO tbl_dr (trn_id, dr_ac, dr_amt, dr_desc) VALUES (%s, %s, %s, %s)"
+        dr_query = "INSERT INTO tbl_dr (trn_id, dr_ac, dr_amt, dr_amt_lak, dr_desc) VALUES (%s, %s, %s, %s, %s)"
         for item in debit_entries:
             dr_ac = clean_string(item.get('dr_ac'))
             dr_amt = Decimal(str(item.get('dr_amt', '0')).replace(',', ''))
+            dr_amt_lak = Decimal(str(item.get('dr_amt_lak', '0')).replace(',', ''))
             dr_desc = item.get('dr_desc') # Optional (None if missing)
-            cursor.execute(dr_query, (trn_id, dr_ac, dr_amt, dr_desc))
+            cursor.execute(dr_query, (trn_id, dr_ac, dr_amt, dr_amt_lak, dr_desc))
         
         # Insert into 'tbl_cr' using trn_id
-        cr_query = "INSERT INTO tbl_cr (trn_id, cr_ac, cr_amt, cr_desc) VALUES (%s, %s, %s, %s)"
+        cr_query = "INSERT INTO tbl_cr (trn_id, cr_ac, cr_amt, cr_amt_lak, cr_desc) VALUES (%s, %s, %s, %s, %s)"
         for item in credit_entries:
             cr_ac = clean_string(item.get('cr_ac'))
             cr_amt = Decimal(str(item.get('cr_amt', '0')).replace(',', ''))
+            cr_amt_lak = Decimal(str(item.get('cr_amt_lak', '0')).replace(',', ''))
             cr_desc = item.get('cr_desc') # Optional (None if missing)
-            cursor.execute(cr_query, (trn_id, cr_ac, cr_amt, cr_desc))
+            cursor.execute(cr_query, (trn_id, cr_ac, cr_amt, cr_amt_lak, cr_desc))
 
         conn.commit()
 

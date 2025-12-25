@@ -30,6 +30,7 @@ CREATE TABLE `msp` (
   `currency` VARCHAR(5) NOT NULL,
   `acc_book` VARCHAR(20) NOT NULL,
   `status` VARCHAR(50) NOT NULL,
+  `ex_rate` DECIMAL(18,2) NOT NULL,
   `fail_reason` VARCHAR(250) DEFAULT NULL,
 
   `bis_date` DATETIME NOT NULL,
@@ -56,6 +57,7 @@ CREATE TABLE `tbl_dr` (
   `trn_id` VARCHAR(20) NOT NULL,
   `dr_ac` VARCHAR(20) NOT NULL,
   `dr_amt` DECIMAL(18,2) NOT NULL,
+  `dr_amt_lak` DECIMAL(18,2) NOT NULL,
   `dr_desc` VARCHAR(250) DEFAULT NULL,
 
   PRIMARY KEY (`id`),
@@ -78,6 +80,7 @@ CREATE TABLE `tbl_cr` (
   `trn_id` VARCHAR(20) NOT NULL,
   `cr_ac` VARCHAR(20) NOT NULL,
   `cr_amt` DECIMAL(18,2) NOT NULL,
+  `cr_amt_lak` DECIMAL(18,2) NOT NULL,
   `cr_desc` VARCHAR(250) DEFAULT NULL,
 
   PRIMARY KEY (`id`),
