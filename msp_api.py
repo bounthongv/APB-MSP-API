@@ -208,7 +208,7 @@ def get_msp_status():
     finally:
         if conn: conn.close()
 
-@msp_bp.route('/cancel', methods=['PATCH'])
+@msp_bp.route('/cancel', methods=['POST'])
 @token_required
 def cancel_msp():
     """Updates status to 'cancel' for a given trn_id."""
