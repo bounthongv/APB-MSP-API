@@ -125,14 +125,6 @@ def retrieve_dr_by_trn_id():
         if conn:
             conn.close()
 
-        return jsonify({"code": "200", "data": records, "message": "success"}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if conn:
-            conn.close()
-
 @apis_bp.route('/update_status', methods=['PATCH'])
 @token_required
 def update_msp_status():
