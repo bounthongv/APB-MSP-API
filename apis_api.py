@@ -125,6 +125,45 @@ def retrieve_dr_by_trn_id():
         if conn:
             conn.close()
 
+@apis_bp.route('/retrieve_cr_trn_id', methods=['GET'])
+@token_required
+def retrieve_cr_by_trn_id():
+    """
+    Retrieves records from the 'tbl_cr' table based on the 'trn_id' parameter.
+    """
+    conn = None
+    try:
+        trn_id = request.args.get("trn_id")
+        if not trn_id:
+            data = request.get_json(silent=True)
+            if data and data.get("trn_id"):
+                trn_id = data.get("trn_id")
+        
+        if not trn_id:
+            return jsonify({"error": "Missing required parameter: trn_id"}), 400
+
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        query = """
+            SELECT trn_id, cr_ac, cr_amt, cr_amt_lak, cr_desc
+            FROM tbl_cr 
+            WHERE trn_id = %s
+        """
+        cursor.execute(query, (trn_id,))
+        records = cursor.fetchall()
+
+        if not records:
+            return jsonify({"code": "404", "message": "Records not found"}), 404
+
+        return jsonify({"code": "200", "data": records, "message": "success"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
 @apis_bp.route('/update_status', methods=['PATCH'])
 @token_required
 def update_msp_status():
