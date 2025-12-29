@@ -20,11 +20,11 @@ MYSQL_CONFIG = {
 
 # Remote MSSQL (Destination)
 MSSQL_CONFIG = {
-    'server': '10.151.146.90',
-    'database': 'FN_APB2025',
-    'user': 'sa',
-    'password': 'Apb@2k25',
-    'driver': '{ODBC Driver 18 for SQL Server}'
+    'server': os.getenv("MSSQL_HOST", '10.151.146.90'),
+    'database': os.getenv("MSSQL_DB", 'FN_APB2025'),
+    'user': os.getenv("MSSQL_USER", 'sa'),
+    'password': os.getenv("MSSQL_PASSWORD", 'Apb@2k25'),
+    'driver': os.getenv("MSSQL_DRIVER", '{ODBC Driver 18 for SQL Server}')
 }
 
 # Fixed Constants from VB Code
