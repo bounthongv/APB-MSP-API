@@ -228,5 +228,73 @@ def sync_data():
         if mysql_conn: mysql_conn.close()
         if mssql_conn: mssql_conn.close()
 
+def sync_cancellations():
+    """
+    Handles records with status='cancel'.
+    Logic from VB: DELETE gen_jn WHERE API='API' AND Referno=trn_id
+    """
+    mysql_conn = None
+    mssql_conn = None
+    
+    try:
+        print(f"[{datetime.now()}] Starting Cancellation Sync...")
+        
+        mysql_conn = get_mysql_conn()
+        mysql_cursor = mysql_conn.cursor(dictionary=True)
+        
+        mssql_conn = get_mssql_conn()
+        mssql_cursor = mssql_conn.cursor()
+
+        # 1. Fetch Pending Cancellations
+        mysql_cursor.execute("SELECT * FROM msp WHERE status = 'cancel' ORDER BY trn_id")
+        cancel_records = mysql_cursor.fetchall()
+        
+        if not cancel_records:
+            print("No pending 'cancel' records found.")
+        else:
+            print(f"Found {len(cancel_records)} records to cancel.")
+            
+            for rec in cancel_records:
+                trn_id = rec['trn_id']
+                print(f"Cancelling {trn_id}...")
+                
+                try:
+                    # Start MSSQL Transaction
+                    mssql_conn.autocommit = False
+                    
+                    # 2. Delete from gen_jn
+                    # "DELETE gen_jn where API='API' and Referno=N'" & trn_id & "'"
+                    mssql_cursor.execute("DELETE FROM gen_jn WHERE API='API' AND Referno = ?", (trn_id,))
+                    row_count = mssql_cursor.rowcount
+                    
+                    # Commit MSSQL
+                    mssql_conn.commit()
+                    mssql_conn.autocommit = True
+                    
+                    if row_count > 0:
+                        print(f"  - Deleted {row_count} rows from gen_jn.")
+                    else:
+                        print(f"  - Warning: No rows found in gen_jn to delete.")
+
+                    # 3. Update MySQL Status
+                    mysql_cursor.execute("UPDATE msp SET status = 'canceled', update_date = NOW() WHERE trn_id = %s", (trn_id,))
+                    mysql_conn.commit()
+                    print(f"  - Status updated to 'canceled' in MySQL.")
+
+                except Exception as e:
+                    mssql_conn.rollback()
+                    mssql_conn.autocommit = True
+                    print(f"  - Error cancelling {trn_id}: {e}")
+                    # Update fail reason
+                    mysql_cursor.execute("UPDATE msp SET fail_reason = %s, update_date = NOW() WHERE trn_id = %s", (f"Cancel Error: {str(e)[:200]}", trn_id))
+                    mysql_conn.commit()
+
+    except Exception as e:
+        print(f"CRITICAL ERROR IN CANCELLATION: {e}")
+    finally:
+        if mysql_conn: mysql_conn.close()
+        if mssql_conn: mssql_conn.close()
+
 if __name__ == "__main__":
     sync_data()
+    sync_cancellations()
