@@ -70,4 +70,73 @@ Yes, ODBC Driver 18 is fully compatible with SQL Server 2019 and SQL Server 2022
    8     "TrustServerCertificate=yes;" # <--- CRITICAL for Driver 18 if no SSL cert
    9 )
 
-   
+
+
+   cron setup
+
+    1. Locate your Python and Script Path
+  First, you need to know the absolute path to your Python executable (inside the virtual environment) and the script itself.
+
+  Run these commands inside your cron_sync folder on the server:
+
+   1 pwd
+   2 # Example Output: /root/cron_sync
+   3 
+   4 which python3
+   5 # Example Output: /root/cron_sync/venv/bin/python3
+
+  2. Edit the Crontab
+  Open the cron editor:
+
+   1 crontab -e
+  (If asked to choose an editor, pick `nano` as it's the easiest).
+
+  3. Add the Schedule
+  Scroll to the bottom of the file and add a line to run the script.
+
+  Example: Run every day at 11:30 PM (23:30)
+
+   1 30 23 * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /var/log/msp_sync.log 2>&1
+
+  Explanation:
+   * 30 23 * * *: At 23:30 (11:30 PM) every day.
+   * /root/cron_sync/venv/bin/python3: Full path to the Python executable (use the output from which python3).
+   * /root/cron_sync/sync_msp.py: Full path to your script.
+   * >> /var/log/msp_sync.log: Append standard output (print statements) to this log file.
+   * 2>&1: Append standard error (errors/crashes) to the same log file.
+
+  4. Save and Exit
+   * Nano: Press Ctrl+O -> Enter -> Ctrl+X.
+   * Vim: Press Esc -> Type :wq -> Enter.
+
+  5. Verify
+  Check that your cron job was saved:
+   1 crontab -l
+
+  6. Monitor Logs
+  To check if it's working (or to debug errors), you can inspect the log file:
+
+   1 tail -f /var/log/msp_sync.log
+
+   for testing
+
+    1. Which time does it use?
+  It uses the Server Time. Before setting the cron, check your server's current time by running:
+   1 date
+  Make sure you look at the hours and minutes exactly as shown in that command output.
+
+  2. How to set a "Test" time?
+  If your server time is 15:40, set the cron to 15:42 like this:
+
+   1 42 15 * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /root/cron_sync/cron_test.log 2>&1
+
+  3. Quick "Every 1 Minute" Test
+  If you want to be sure the paths and permissions are correct without waiting for a specific hour, you can set it to run every minute:
+
+   1 * * * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /root/cron_sync/cron_test.log 2>&1
+  Wait 60 seconds, then check the log file.
+
+  4. How to check the results?
+  Since we redirected the output, you can watch the log in real-time to see if the script starts:
+
+   1 tail -f /root/cron_sync/cron_test.log

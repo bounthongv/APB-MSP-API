@@ -6,8 +6,10 @@ from dotenv import load_dotenv
 from datetime import datetime
 import decimal
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from the same directory as this script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, '.env')
+load_dotenv(env_path)
 
 # --- Configuration ---
 # Local MySQL (Source)
