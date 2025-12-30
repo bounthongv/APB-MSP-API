@@ -1,0 +1,18 @@
+[Unit]
+Description=APB Sync Service (MSP Sync)
+After=network.target
+
+[Service]
+User=root
+# Set the working directory to where the .env file is located
+WorkingDirectory=/root/cron_sync
+# Point to the compiled executable
+ExecStart=/root/cron_sync/apb_sync
+# Restart ensures it runs in a loop. 
+# It will run, finish, wait for RestartSec, and run again.
+Restart=always
+# Adjust the interval as needed (e.g., 60 = 1 minute, 300 = 5 minutes)
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target

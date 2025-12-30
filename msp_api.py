@@ -264,16 +264,18 @@ def search_msp_by_date():
     finally:
         if conn: conn.close()
 
-@msp_bp.route('/retrieve', methods=['GET'])
+@msp_bp.route('/retrieve', methods=['POST'])
 @token_required
 def retrieve_msp():
     """Retrieves records by status."""
     conn = None
     try:
-        status = request.args.get("status")
-        if not status:
-            data = request.get_json(silent=True)
-            if data and data.get("Data"): status = data.get("Data").get("status")
+        data = request.get_json(silent=True)
+        status = None
+        if data:
+            status = data.get("status")
+            if not status and data.get("Data"):
+                status = data.get("Data").get("status")
         
         if not status: return jsonify({"error": "Missing status"}), 400
 

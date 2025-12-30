@@ -1,4 +1,5 @@
 import os
+import sys
 import pyodbc
 import mysql.connector
 from mysql.connector import Error
@@ -6,8 +7,17 @@ from dotenv import load_dotenv
 from datetime import datetime
 import decimal
 
-# Load environment variables from the same directory as this script
-script_dir = os.path.dirname(os.path.abspath(__file__))
+# Load environment variables
+if getattr(sys, 'frozen', False):
+    # If the application is run as a bundle, the PyInstaller bootloader
+    # extends the sys module by a flag frozen=True and sets the app 
+    # path into variable _MEIPASS'.
+    # However, for finding the .env file which is EXTERNAL to the exe,
+    # we want the directory of the executable itself.
+    script_dir = os.path.dirname(sys.executable)
+else:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
 env_path = os.path.join(script_dir, '.env')
 load_dotenv(env_path)
 

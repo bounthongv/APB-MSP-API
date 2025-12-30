@@ -94,7 +94,8 @@ Yes, ODBC Driver 18 is fully compatible with SQL Server 2019 and SQL Server 2022
   3. Add the Schedule
   Scroll to the bottom of the file and add a line to run the script.
 
-  Example: Run every day at 11:30 PM (23:30)
+  Example: Run every day at 0:30 PM (23:30)
+  
 
    1 30 23 * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /var/log/msp_sync.log 2>&1
 
@@ -133,10 +134,78 @@ Yes, ODBC Driver 18 is fully compatible with SQL Server 2019 and SQL Server 2022
   3. Quick "Every 1 Minute" Test
   If you want to be sure the paths and permissions are correct without waiting for a specific hour, you can set it to run every minute:
 
-   1 * * * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /root/cron_sync/cron_test.log 2>&1
-  Wait 60 seconds, then check the log file.
+   * * * * * cd /root/cron_sync && /root/cron_sync/venv/bin/python3 sync_msp.py >> /root/cron_sync/cron_test.log 2>&1
+
+    Wait 60 seconds, then check the log file.
 
   4. How to check the results?
   Since we redirected the output, you can watch the log in real-time to see if the script starts:
 
    1 tail -f /root/cron_sync/cron_test.log
+
+## Option 2: Run as a Service (Executable)
+
+If you prefer to run the sync process as a systemd service (like the API), follow these steps. This method allows the sync to run continuously (e.g., every minute) and automatically restart if the server reboots.
+
+### 1. Build the Executable
+In your development environment (Windows/Linux), build the standalone executable.
+**Note:** Ensure you have `pyinstaller` installed (`pip install pyinstaller`).
+
+```bash
+# Run from the project root or inside cron-sync folder
+cd cron-sync
+pyinstaller --onefile --name apb_sync sync_msp.py
+```
+
+This will create `dist/apb_sync` (Linux) or `dist/apb_sync.exe` (Windows).
+
+### 2. Prepare the Server
+1. Create a folder on the server:
+   ```bash
+   mkdir -p /root/cron_sync
+   ```
+2. Upload the **Linux executable** (`apb_sync`) (from the `dist` folder) to `/root/cron_sync/`.
+3. Upload your `.env` file to `/root/cron_sync/`.
+4. Upload the `apb_sync.service` file to `/root/cron_sync/`.
+
+### 3. Install the Service
+Run the following commands on the server:
+
+```bash
+# 1. Move the service file to systemd directory
+cp /root/cron_sync/apb_sync.service /etc/systemd/system/
+
+# 2. Make the executable executable (just in case)
+chmod +x /root/cron_sync/apb_sync
+
+# 3. Reload systemd
+systemctl daemon-reload
+
+# 4. Start the service
+systemctl start apb_sync
+
+# 5. Enable on boot
+systemctl enable apb_sync
+```
+
+### 4. Configuration (Interval)
+By default, the service is configured to restart (run again) **60 seconds** after finishing. This creates a 1-minute loop.
+
+To change this:
+1. Edit the service file:
+   ```bash
+   nano /etc/systemd/system/apb_sync.service
+   ```
+2. Change `RestartSec=60` to your desired interval (in seconds).
+   * Example: `RestartSec=300` for 5 minutes.
+3. Reload and restart:
+   ```bash
+   systemctl daemon-reload
+   systemctl restart apb_sync
+   ```
+
+### 5. Check Logs
+View the service logs:
+```bash
+journalctl -u apb_sync -f
+```
