@@ -94,13 +94,16 @@ Yes, ODBC Driver 18 is fully compatible with SQL Server 2019 and SQL Server 2022
   3. Add the Schedule
   Scroll to the bottom of the file and add a line to run the script.
 
-  Example: Run every day at 0:30 PM (23:30)
+  Example: Run every day at 11:30 PM (23:30)
   
-
    1 30 23 * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /var/log/msp_sync.log 2>&1
+
+  Note: For the APB production setup, we use 00:30 AM (0:30) to allow a buffer after the midnight transaction posting:
+   1 30 0 * * * /root/cron_sync/venv/bin/python3 /root/cron_sync/sync_msp.py >> /var/log/msp_sync.log 2>&1
 
   Explanation:
    * 30 23 * * *: At 23:30 (11:30 PM) every day.
+   * 30 0 * * *: At 00:30 (12:30 AM) every day.
    * /root/cron_sync/venv/bin/python3: Full path to the Python executable (use the output from which python3).
    * /root/cron_sync/sync_msp.py: Full path to your script.
    * >> /var/log/msp_sync.log: Append standard output (print statements) to this log file.
