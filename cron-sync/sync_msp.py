@@ -40,7 +40,7 @@ MSSQL_CONFIG = {
 }
 
 # Fixed Constants from VB Code
-OFFICE_ID = "00-00" # Equivalent to MuSubOff in VB (Assumed default, adjust if needed)
+OFFICE_ID = "01-02" # Equivalent to MuSubOff in VB
 USER_ID = "API_BOT" # Equivalent to MUserID
 
 def get_mssql_conn():
