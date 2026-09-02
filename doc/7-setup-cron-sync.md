@@ -212,3 +212,49 @@ View the service logs:
 ```bash
 journalctl -u apb_sync -f
 ```
+
+### 6. Retry & Logging Behavior (Post-Fix)
+
+**What changed:**
+- **Retry logic**: Failed transactions are no longer permanently stuck. Records that fail during MSSQL insert are marked `status = 'fail'` (instead of incorrectly marked `'success'`). They are retried on every service cycle (every 60 seconds by default).
+
+- **24-hour retry window**: A failed transaction is retried continuously for up to 24 hours (86,400 seconds). After 24 hours, a **highly visible ALERT line** is written to the log so the administrator can spot it.
+
+- **Duplicate prevention**: Before inserting, the script checks `gen_jn` for the same `Referno` + `API='API'`. If the transaction already exists in MSSQL, it is NOT re-inserted (marked success instead) — so retries can never create duplicate accounting entries.
+
+- **Logging**: All operations are logged to `/var/log/apb_sync.log` (structured log format with timestamps).
+
+**MySQL table requirement:** The `msp` table needs these columns (already in the schema, verify on the live server):
+```sql
+ALTER TABLE msp ADD COLUMN fail_reason VARCHAR(250) DEFAULT NULL AFTER status;
+ALTER TABLE msp ADD COLUMN update_date DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP;
+```
+
+**Environment variables** (add to `.env`):
+```
+SYNC_LOG=/var/log/apb_sync.log
+SYNC_RETRY_WINDOW=86400
+OFFICE_ID=01-02
+USER_ID=API_BOT
+```
+
+**How to monitor:**
+```bash
+# Watch the structured log
+tail -f /var/log/apb_sync.log
+
+# Check for ALERT lines (transactions failing >24h)
+grep "ALERT" /var/log/apb_sync.log
+
+# Check for errors
+grep "Error\|CRITICAL" /var/log/apb_sync.log
+
+# Check MySQL for failed (unresolved) records
+mysql -e "SELECT trn_id, status, fail_reason, update_date FROM apb_msp.msp WHERE status = 'fail'"
+```
+
+**Manual recovery for previously-missed dates:** If APB reports dates missing from the accounting system but the records show `status = 'success'` in MySQL, flip them back to `'wait'` so the next sync cycle re-processes them:
+```sql
+UPDATE apb_msp.msp SET status = 'wait', fail_reason = NULL WHERE status = 'success' AND bis_date IN ('2026-09-11','2026-09-12','2026-09-14','2026-09-18');
+```
+The sync will re-check MSSQL: if already posted it marks success (no duplicate); if not posted it inserts them.
